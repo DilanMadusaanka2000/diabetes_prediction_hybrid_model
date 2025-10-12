@@ -3,13 +3,14 @@ import numpy as np
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
+
 # Define global variables for the loaded components
 MODEL = None
 IMPUTER = None
 SCALER = None
 
 try:
-    MODEL = joblib.load('hybrid_diab_rf_ann_model.joblib')
+    MODEL = joblib.load('hybrid_diab_rf_ann_model_v2.joblib')
     IMPUTER = joblib.load('imputer.joblib')
     SCALER = joblib.load('scaler.joblib')
     print("Model and preprocessors loaded successfully.")

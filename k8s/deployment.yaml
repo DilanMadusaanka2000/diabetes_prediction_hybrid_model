@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name:diabetes-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: diabetes-api
+  template:
+    metadata:
+      labels:
+        app: diabetes-api
+    spec:
+      containers:
+        - name: diabetes-api
+          image: dilanmadusanka/diabetes-api:latest
+          ports:
+            - containerPort: 80
+          env:
+            -name: ReDIS_HOST
+            value: "6379"
+                     
+            
+            

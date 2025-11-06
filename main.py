@@ -1,7 +1,16 @@
 import joblib
 import numpy as np
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends, Header
 from pydantic import BaseModel, Field
+import redis
+import string
+import uuid
+import random
+
+#redis configuration
+
+redis_client = redis.Redis(host="localhost", port=6379, db=0, decode_responses=True)
+OTP_EXPIRATION = 300 
 
 
 MODEL = None
@@ -49,7 +58,34 @@ class PatientData(BaseModel):
     HbA1c_level: float = Field(..., gt=0, description="HbA1c level")
     blood_glucose_level: float = Field(..., gt=0, description="Blood glucose level")
     smoking_history_numeric: float = Field(..., ge=0, description="Smoking history (Encoded numerically)")
-    
+
+class LoginInitRequest(BaseModel):
+    username: str
+
+class VerifyOtpRequest(BaseModel):
+    username: str
+    otp: str
+    token: str
+
+#generate OTP  
+def generate_otp(length=6):
+    return ''.join(random.choices(string.digits, k=length))
+
+#generate token
+def generate_token():
+    return str(uuid.uuid4())
+
+
+def verify_token(x_token: str = Header(...)):
+    """Middleware: Validate Redis token for protected routes."""
+    all_keys = redis_client.keys("user:*")
+    for key in all_keys:
+        stored_token = redis_client.hget(key, "token")
+        if stored_token == x_token:
+            return True
+    raise HTTPException(status_code=401, detail="Invalid or expired token.")
+
+
     model_config = {
         "json_schema_extra": {
             "examples": [
@@ -70,7 +106,7 @@ class PatientData(BaseModel):
 app = FastAPI(
     title="Diabetes Prediction API",
     description="A FastAPI service for predicting diabetes using a Hybrid RF-ANN Ensemble Model.",
-    version="1.0.0",
+    version="2.0.0",
 )
 
 @app.get("/")
@@ -78,8 +114,43 @@ def read_root():
     """Root endpoint for a simple health check."""
     return {"message": "Diabetes Prediction API is running. Go to /predict to use the model."}
 
+
+@app.post("/login/init")
+def login_init(request: LoginInitRequest):
+    username = request.username.lower()
+    otp = generate_otp()
+    token= generate_token()
+    
+    redis_key = f"user:{username}"
+    redis_client.hmset(redis_key, {"otp": otp, "token": token})
+    redis_client.expire(redis_key, OTP_EXPIRATION)
+
+    print(f"[DEBUG] OTP for {username}: {otp}")
+
+    return {
+        "message": "OTP generated successfully. Use the token to verify.",
+        "token": token,
+        "otp": otp  # Remove in production!
+    }
+@app.post("/login/verify")
+def verify_otp(request: VerifyOtpRequest):
+    username = request.username.lower()
+    redis_key = f"user:{username}"
+    stored_data = redis_client.hgetall(redis_key)
+
+    if not stored_data:
+        raise HTTPException(status_code=400, detail="OTP expired or user not found.")
+    if stored_data.get("token") != request.token:
+        raise HTTPException(status_code=400, detail="Invalid token.")
+    if stored_data.get("otp") != request.otp:
+        raise HTTPException(status_code=400, detail="Invalid OTP.")
+
+    redis_client.delete(redis_key)
+    return {"message": "OTP verified successfully!", "status": "success"}
+
+
 @app.post("/predict")
-async def predict_diabetes(data: PatientData):
+async def predict_diabetes(data: PatientData, authorized: bool = Depends(verify_token)):
     """
     Endpoint to receive patient data and return a diabetes prediction.
     

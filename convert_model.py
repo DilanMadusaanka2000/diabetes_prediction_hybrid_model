@@ -10,4 +10,4 @@ model = joblib.load(input_path)
 print("Saving converted model...")
 joblib.dump(model, output_path)
 
-print(f"✅ Model successfully saved as: {output_path}")
+print(f" Model successfully saved as: {output_path}")

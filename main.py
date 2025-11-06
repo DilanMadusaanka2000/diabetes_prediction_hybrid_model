@@ -117,21 +117,29 @@ def read_root():
 
 @app.post("/login/init")
 def login_init(request: LoginInitRequest):
-    username = request.username.lower()
-    otp = generate_otp()
-    token= generate_token()
-    
-    redis_key = f"user:{username}"
-    redis_client.hmset(redis_key, {"otp": otp, "token": token})
-    redis_client.expire(redis_key, OTP_EXPIRATION)
+    try:
+        username = request.username.lower()
+        otp = generate_otp()
+        token = generate_token()
 
-    print(f"[DEBUG] OTP for {username}: {otp}")
+        redis_key = f"user:{username}"
 
-    return {
-        "message": "OTP generated successfully. Use the token to verify.",
-        "token": token,
-        "otp": otp  # Remove in production!
-    }
+        redis_client.hset(redis_key, mapping={"otp": otp, "token": token})
+        redis_client.expire(redis_key, OTP_EXPIRATION)
+
+        print(f"[DEBUG] OTP for {username}: {otp}")
+
+        return {
+            "message": "OTP generated successfully. Use the token to verify.",
+            "token": token,
+            "otp": otp 
+        }
+
+    except redis.ConnectionError:
+        raise HTTPException(status_code=500, detail="Redis server is not running.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+
 @app.post("/login/verify")
 def verify_otp(request: VerifyOtpRequest):
     username = request.username.lower()

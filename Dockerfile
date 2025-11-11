@@ -7,6 +7,7 @@ WORKDIR /app
 # Copy the requirements file and install dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+COPY . .
 
 COPY main.py .
 COPY hybrid_diab_rf_ann_model.joblib .
